@@ -1,0 +1,11 @@
+# Simulation artifacts
+/build/
+
+# GHDL artifacts outside build
+*.cf
+*.ghw
+*.vcd
+*.fst
+
+# GTKWave configuration
+*.gtkw
