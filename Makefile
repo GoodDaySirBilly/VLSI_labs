@@ -11,7 +11,9 @@ TEST_DIR  := tests/$(PROJECT)
 BUILD_DIR := build/$(PROJECT)
 
 # VHDL sources and testbenches
-SOURCES := $(sort $(wildcard $(SRC_DIR)/*.vhd))
+PKGS    := $(wildcard $(SRC_DIR)/*pkg.vhd)
+OTHERS  := $(filter-out $(PKGS), $(wildcard $(SRC_DIR)/*.vhd))
+SOURCES := $(PKGS) $(sort $(OTHERS))
 TESTS   := $(sort $(wildcard $(TEST_DIR)/*.vhd))
 
 # Supported testbench naming: *_tb.vhd or tb_*.vhd
