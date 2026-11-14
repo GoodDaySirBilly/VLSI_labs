@@ -1,0 +1,127 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use work.mem_block_types_pkg.all;
+use work.arbitr_types_pkg.all;
+
+entity top is
+    generic (
+        INTERFACES_NUM : integer := 4
+    );
+    port (
+        i_clk        : in std_logic;
+        i_rst        : in std_logic;
+        i_prioreties : in priority_vector_t(INTERFACES_NUM - 1 downto 0);
+        i_mosi       : in  mem_block_mosi_array_t(INTERFACES_NUM - 1 downto 0);
+        o_miso       : out mem_block_miso_array_t(INTERFACES_NUM - 1 downto 0)
+    );
+end entity top;
+
+architecture rtl of top is
+    signal mosi_int : mem_block_mosi_array_t(INTERFACES_NUM - 1 downto 0);
+    signal miso_int : mem_block_miso_array_t(INTERFACES_NUM - 1 downto 0);
+
+    -- Для арбитра
+    signal conflict  : std_logic_vector(INTERFACES_NUM - 1 downto 0);
+    signal grant_vec : std_logic_vector(INTERFACES_NUM - 1 downto 0);
+
+    -- Защелкиваем "текущие" адреса, чтобы видеть транзакции, которые уже начались
+    signal curr_addr : addr_array_t(INTERFACES_NUM - 1 downto 0);
+    signal curr_rw   : std_logic_vector(INTERFACES_NUM - 1 downto 0);
+    signal is_busy   : std_logic_vector(INTERFACES_NUM - 1 downto 0);
+begin
+
+    -- 1. ОТСЛЕЖИВАНИЕ АКТИВНЫХ ТРАНЗАКЦИЙ
+    process(i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if i_rst = '1' then
+                is_busy <= (others => '0');
+            else
+                for i in 0 to INTERFACES_NUM - 1 loop
+                    -- Если FSM приняла addr_valid, значит она защелкнула адрес и начала работу
+                    if mosi_int(i).addr_valid = '1' and is_busy(i) = '0' then
+                        curr_addr(i) <= mosi_int(i).addr;
+                        curr_rw(i) <= mosi_int(i).rw;
+                        is_busy(i) <= '1';
+                    end if;
+                    
+                    -- Как только пришел ответ, транзакция завершена
+                    if miso_int(i).wdata_ack = '1' or miso_int(i).rdata_valid = '1' then
+                        is_busy(i) <= '0';
+                    end if;
+                end loop;
+            end if;
+        end if;
+    end process;
+
+    -- 2. ДЕТЕКТОР КОНФЛИКТОВ (только для одновременных запросов в один такт)
+    process(i_mosi, is_busy, curr_addr, curr_rw)
+    begin
+        conflict <= (others => '0');
+        for i in 0 to INTERFACES_NUM - 1 loop
+            if i_mosi(i).addr_valid = '1' then
+                for j in 0 to INTERFACES_NUM - 1 loop
+                    if i /= j then
+                        -- Конфликт новых запросов в одном такте
+                        if i_mosi(j).addr_valid = '1' and i_mosi(i).addr = i_mosi(j).addr then
+                            if i_mosi(i).rw = '1' or i_mosi(j).rw = '1' then
+                                conflict(i) <= '1';
+                            end if;
+                        end if;
+                        -- Конфликт нового запроса с уже выполняющимся
+                        if is_busy(j) = '1' and i_mosi(i).addr = curr_addr(j) then
+                            if i_mosi(i).rw = '1' or curr_rw(j) = '1' then
+                                conflict(i) <= '1';
+                            end if;
+                        end if;
+                    end if;
+                end loop;
+            end if;
+        end loop;
+    end process;
+
+    -- 3. АРБИТР (вмешивается только при conflict = '1')
+    U_ARB : entity work.arbitr
+        generic map ( DEVICES_NUM => INTERFACES_NUM )
+        port map (
+            i_clk        => i_clk,
+            i_reset      => i_rst,
+            i_prioreties => i_prioreties,
+            i_request    => conflict, -- Запрос только при конфликте!
+            o_response   => grant_vec
+        );
+
+    -- 4. МУЛЬТИПЛЕКСОР И БЛОКИРОВКА
+    process(i_mosi, conflict, grant_vec)
+    begin
+        for i in 0 to INTERFACES_NUM - 1 loop
+            mosi_int(i) <= i_mosi(i);
+            
+            -- Если есть конфликт, и мы проиграли арбитраж -> глушим запрос
+            if conflict(i) = '1' and grant_vec(i) = '0' then
+                mosi_int(i).addr_valid <= '0';
+                mosi_int(i).wdata_valid <= '0';
+            end if;
+        end loop;
+    end process;
+
+    -- 5. ВЫХОДЫ
+    process(miso_int)
+    begin
+        for i in 0 to INTERFACES_NUM - 1 loop
+            o_miso(i) <= miso_int(i);
+        end loop;
+    end process;
+
+    -- 6. НЕТРОНУТЫЙ MEM_BLOCK (только не забудь поставить ");" в конце!)
+    U_MEM : entity work.mem_block
+        generic map ( INTERFACES_NUM => INTERFACES_NUM )
+        port map (
+            i_clk  => i_clk,
+            i_rst  => i_rst,
+            i_mosi => mosi_int,
+            o_miso => miso_int
+        );
+
+end architecture rtl;
