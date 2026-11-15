@@ -55,19 +55,20 @@ run:
 	done
 	
 	@set -e; for top in $(TOPS); do \
-		$(GHDL) -e $(GHDL_FLAGS) $$top; \
-		$(GHDL) -r $(GHDL_FLAGS) $$top \
-			--wave=$(BUILD_DIR)/$$top.ghw; \
+		$(GHDL) -e $(GHDL_FLAGS) -o $(BUILD_DIR)/$$top $$top; \
+		./$(BUILD_DIR)/$$top --wave=$(BUILD_DIR)/$$top.ghw; \
 	done
 
 # Simulate and open waveform
 wave: run
-	$(GTKWAVE) $(BUILD_DIR)/$(firstword $(TOPS)).ghw
+	@set -e; for top in $(TOPS); do \
+		$(GTKWAVE) $(BUILD_DIR)/$$top.ghw; \
+	done
 
 # Run all available testbenches
 test:
 	@set -e; for project in $(TEST_PROJECTS); do \
-		$(MAKE) --no-password-directory run PROJECT=$$project; \
+		$(MAKE) --no-print-directory run PROJECT=$$project; \
 	done
 
 # Remove generated artifacts
