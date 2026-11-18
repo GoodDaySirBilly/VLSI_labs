@@ -31,7 +31,6 @@ architecture rtl of top is
     signal is_busy   : std_logic_vector(INTERFACES_NUM - 1 downto 0);
 begin
 
-    -- 1. ОТСЛЕЖИВАНИЕ АКТИВНЫХ ТРАНЗАКЦИЙ
     process(i_clk)
     begin
         if rising_edge(i_clk) then
@@ -55,20 +54,22 @@ begin
         end if;
     end process;
 
-    -- 2. ДЕТЕКТОР КОНФЛИКТОВ (только для одновременных запросов в один такт)
     process(i_mosi, is_busy, curr_addr, curr_rw)
     begin
         conflict <= (others => '0');
         for i in 0 to INTERFACES_NUM - 1 loop
+
             if i_mosi(i).addr_valid = '1' then
                 for j in 0 to INTERFACES_NUM - 1 loop
                     if i /= j then
+
                         -- Конфликт новых запросов в одном такте
                         if i_mosi(j).addr_valid = '1' and i_mosi(i).addr = i_mosi(j).addr then
                             if i_mosi(i).rw = '1' or i_mosi(j).rw = '1' then
                                 conflict(i) <= '1';
                             end if;
                         end if;
+
                         -- Конфликт нового запроса с уже выполняющимся
                         if is_busy(j) = '1' and i_mosi(i).addr = curr_addr(j) then
                             if i_mosi(i).rw = '1' or curr_rw(j) = '1' then
@@ -81,7 +82,6 @@ begin
         end loop;
     end process;
 
-    -- 3. АРБИТР (вмешивается только при conflict = '1')
     U_ARB : entity work.arbitr
         generic map ( DEVICES_NUM => INTERFACES_NUM )
         port map (
@@ -92,7 +92,6 @@ begin
             o_response   => grant_vec
         );
 
-    -- 4. МУЛЬТИПЛЕКСОР И БЛОКИРОВКА
     process(i_mosi, conflict, grant_vec)
     begin
         for i in 0 to INTERFACES_NUM - 1 loop
@@ -106,7 +105,6 @@ begin
         end loop;
     end process;
 
-    -- 5. ВЫХОДЫ
     process(miso_int)
     begin
         for i in 0 to INTERFACES_NUM - 1 loop
@@ -114,7 +112,6 @@ begin
         end loop;
     end process;
 
-    -- 6. НЕТРОНУТЫЙ MEM_BLOCK (только не забудь поставить ");" в конце!)
     U_MEM : entity work.mem_block
         generic map ( INTERFACES_NUM => INTERFACES_NUM )
         port map (

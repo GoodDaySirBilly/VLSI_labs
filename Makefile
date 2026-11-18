@@ -62,7 +62,12 @@ run:
 # Simulate and open waveform
 wave: run
 	@set -e; for top in $(TOPS); do \
-		$(GTKWAVE) $(BUILD_DIR)/$$top.ghw; \
+		script="$(TEST_DIR)/$$top.tcl"; \
+		if [ -f "$$script" ]; then \
+			$(GTKWAVE) --script "$$script" "$(BUILD_DIR)/$$top.ghw"; \
+		else \
+			$(GTKWAVE) "$(BUILD_DIR)/$$top.ghw"; \
+		fi; \
 	done
 
 # Run all available testbenches
