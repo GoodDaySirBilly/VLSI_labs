@@ -1,79 +1,40 @@
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 use std.env.all;
 
 entity comb_schema_tb is
 end entity comb_schema_tb;
 
 architecture sim of comb_schema_tb is
-    signal a : std_logic := '0';
-    signal b : std_logic := '0';
-    signal c : std_logic := '0';
-    signal d : std_logic := '0';
-    signal y : std_logic;
+    signal a, b, c, d : std_logic := '0';
+    signal y1, y2     : std_logic;
+    signal y_ref      : std_logic;
 begin
 
-    dut : entity work.comb_schema
-        port map (
-            a => A,
-            b => B,
-            c => C,
-            d => D,
-            y => Y
-        );
+    dut1 : entity work.comb_schema
+        port map (A => a, B => b, C => c, D => d, Y => y1);
+
+    dut2 : entity work.comb_schema_block
+        port map (A => a, B => b, C => c, D => d, Y => y2);
+
+    y_ref <= a and not (b or c or d);
 
     stimulus : process
     begin
-        
-        a <= '0'; b <= '0'; c <= '0'; d <= '0'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
+        for i in 0 to 15 loop
+            (a, b, c, d) <= std_logic_vector(to_unsigned(i, 4));
+            wait for 1 ns;   -- дать комбинационной логике установиться
 
-        a <= '0'; b <= '0'; c <= '0'; d <= '1'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
+            assert y1 = y_ref
+                report "DUT1 mismatch at i=" & integer'image(i)
+                severity failure;
+            assert y2 = y_ref
+                report "DUT2 mismatch at i=" & integer'image(i)
+                severity failure;
+        end loop;
 
-        a <= '0'; b <= '0'; c <= '1'; d <= '0'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
-
-        a <= '0'; b <= '0'; c <= '1'; d <= '1'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
-
-        a <= '0'; b <= '1'; c <= '0'; d <= '0'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
-
-        a <= '0'; b <= '1'; c <= '0'; d <= '1'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
-
-        a <= '0'; b <= '1'; c <= '1'; d <= '0'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
-
-        a <= '0'; b <= '1'; c <= '1'; d <= '1'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
-
-        a <= '1'; b <= '0'; c <= '0'; d <= '0'; wait for 2 ns;
-        assert y = '1' report "Test failed: expected 1" severity failure;
-
-        a <= '1'; b <= '0'; c <= '0'; d <= '1'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
-
-        a <= '1'; b <= '0'; c <= '1'; d <= '0'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
-
-        a <= '1'; b <= '0'; c <= '1'; d <= '1'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
-
-        a <= '1'; b <= '1'; c <= '0'; d <= '0'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
-
-        a <= '1'; b <= '1'; c <= '0'; d <= '1'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
-
-        a <= '1'; b <= '1'; c <= '1'; d <= '0'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
-
-        a <= '1'; b <= '1'; c <= '1'; d <= '1'; wait for 2 ns;
-        assert y = '0' report "Test failed: expected 0" severity failure;
-
-        wait for 1 ns;
+        report "All tests passed" severity note;
         finish;
     end process;
 
